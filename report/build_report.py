@@ -207,6 +207,72 @@ def no_borders(table):
     tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
 
 
+def add_page_border(section, color="404040", size=8, space=18):
+    """Draw a double rule around every page in the section."""
+    sect_pr = section._sectPr
+    pg_borders = sect_pr.find(qn("w:pgBorders"))
+    if pg_borders is None:
+        pg_borders = OxmlElement("w:pgBorders")
+        pg_borders.set(qn("w:offsetFrom"), "page")
+        pg_mar = sect_pr.find(qn("w:pgMar"))
+        if pg_mar is not None:
+            pg_mar.addnext(pg_borders)
+        else:
+            sect_pr.append(pg_borders)
+    for edge in ("top", "left", "bottom", "right"):
+        element = OxmlElement(f"w:{edge}")
+        element.set(qn("w:val"), "double")
+        element.set(qn("w:sz"), str(size))
+        element.set(qn("w:space"), str(space))
+        element.set(qn("w:color"), color)
+        pg_borders.append(element)
+
+
+def title_logo_header():
+    """College and university logos flanking the institution name."""
+    table = doc.add_table(rows=1, cols=3)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    no_borders(table)
+    cell_margins(table, left=0.02, right=0.02, top=0.0, bottom=0.0)
+    widths = (0.9, 4.5, 0.9)
+    for index, width in enumerate(widths):
+        table.columns[index].width = Inches(width)
+    row = table.rows[0]
+    row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+
+    for index, filename, width in ((0, "logo_college.png", 0.74), (2, "logo_university.png", 0.68)):
+        cell = row.cells[index]
+        cell.width = Inches(widths[index])
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.line_spacing = 1.0
+        p.add_run().add_picture(str(FIG / filename), width=Inches(width))
+
+    cell = row.cells[1]
+    cell.width = Inches(widths[1])
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    lines = [
+        ("Nutan Maharashtra Vidya Prasarak Mandal’s (NMVPM’s)", 10, True),
+        ("NUTAN MAHARASHTRA INSTITUTE OF ENGINEERING AND TECHNOLOGY (NMIET)", 10.5, True),
+        ("Under Administrative Support - Pimpri Chinchwad Education Trust (PCET)", 8.5, False),
+        ("Computer Science and Engineering Department", 10, True),
+    ]
+    for index, (text, size, bold) in enumerate(lines):
+        p = cell.paragraphs[0] if index == 0 else cell.add_paragraph()
+        pf = p.paragraph_format
+        pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        pf.space_before = Pt(0)
+        pf.space_after = Pt(1 if index < len(lines) - 1 else 0)
+        pf.line_spacing = 1.0
+        run = p.add_run(text)
+        style_run(run, size=size, bold=bold)
+    return table
+
+
 def set_cell(cell, text, size=9, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT, fill=None, color=None):
     cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     p = cell.paragraphs[0]
@@ -483,6 +549,7 @@ config_heading("Heading 2", 12.5, 8, 3)
 config_heading("Heading 3", 11.5, 6, 2, italic=True)
 
 add_page_number_footer(section)
+add_page_border(section)
 
 props = doc.core_properties
 props.title = SHORT_TITLE
@@ -495,11 +562,8 @@ props.comments = "Technical seminar report, Computer Science and Engineering Dep
 # ---------------------------------------------------------------------------
 # title page
 # ---------------------------------------------------------------------------
-center("Nutan Maharashtra Vidya Prasarak Mandal’s (NMVPM’s)", 12, True, before=4, after=3)
-center("NUTAN MAHARASHTRA INSTITUTE OF ENGINEERING AND TECHNOLOGY (NMIET)", 13.5, True, after=3)
-center("Under Administrative Support - Pimpri Chinchwad Education Trust (PCET)", 11, after=3)
-center("Computer Science and Engineering Department", 12, True, after=34)
-
+title_logo_header()
+spacer(14)
 center("TECHNICAL SEMINAR REPORT", 16, True, after=5)
 center("ON", 12, after=7)
 center(TITLE, 18.5, True, after=12, line=1.18)
