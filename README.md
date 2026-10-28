@@ -14,6 +14,7 @@ The app is fully client-side, persists state to `localStorage`, and ships with a
 
 - **App:** https://chainguard-v2-ten.vercel.app
 - **Source:** https://github.com/Vivek16-Py/chainguard-v2
+- **Vercel project:** https://vercel.com/vivek-da38/chainguard-v2
 
 ## Why this exists
 
