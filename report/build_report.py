@@ -481,7 +481,7 @@ for toc_name, bold in (("TOC 1", True), ("TOC 2", False)):
 props = doc.core_properties
 props.title = SHORT_TITLE
 props.subject = "Technical Seminar Report"
-props.author = "Pallavi Kokate, Anil Kewat, Nikita Sagar"
+props.author = "Vivek Rathod"
 props.keywords = "ChainGuard, last-mile logistics, custody, shrinkage, reconciliation, React, TypeScript"
 props.comments = "Technical seminar report, Computer Science and Engineering Department, NMIET."
 
@@ -636,22 +636,16 @@ def signature_table(rows):
 letterhead()
 center("Technical Seminar Report on", 17, True, after=10)
 center(TITLE, 15, True, after=8, line=1.12)
-center("Project Reference: ChainGuard v2.4", 10.5, True, after=22)
+center("Project Reference: ChainGuard v2.4", 10.5, True, after=30)
 
 center("SUBMITTED TO THE DEPARTMENT OF", 11.5, True, after=2)
-center("COMPUTER SCIENCE & ENGINEERING", 11.5, True, after=28)
+center("COMPUTER SCIENCE & ENGINEERING", 11.5, True, after=36)
 
-center("SUBMITTED BY", 13, True, after=10)
-student_table(
-    (
-        ("Ms. Pallavi Kokate", "B34"),
-        ("Mr. Anil Kewat", "B45"),
-        ("Ms. Nikita Sagar", "B50"),
-    )
-)
+center("SUBMITTED BY", 13, True, after=14)
+student_table((("Vivek Rathod", "B49"),))
 
-center("Under The Guidance of", 13.5, True, before=26, after=4)
-center("Miss. Sakshi Ambadkar", 13.5, True, after=100)
+center("Under The Guidance of", 13.5, True, before=44, after=4)
+center("Miss. Sakshi Ambadkar", 13.5, True, after=106)
 
 center("ACADEMIC YEAR : 2026–27", 13.5, True, after=10)
 center(
@@ -686,14 +680,7 @@ para(
     bold_all=True,
 )
 para("Submitted by", 11.5, WD_ALIGN_PARAGRAPH.CENTER, after=5)
-student_table(
-    (
-        ("Ms. Pallavi Kokate", "B34"),
-        ("Mr. Anil Kewat", "B45"),
-        ("Ms. Nikita Sagar", "B50"),
-    ),
-    size=11,
-)
+student_table((("Vivek Rathod", "B49"),), size=11)
 para(
     "Has completed the technical seminar report satisfactorily in the subject of "
     "Technical Seminar (ELC342CSE) for the academic year 2026–2027 as prescribed in "
@@ -709,7 +696,7 @@ para(
     after=0,
 )
 
-spacer(118)
+spacer(150)
 signature_table(
     (
         ("Miss. Sakshi Ambadkar", "Seminar Guide", "Dept. of CSE"),
@@ -745,9 +732,7 @@ para(
     "credit for anything that works belongs to the team.",
     after=28,
 )
-para("Pallavi Kokate (B34)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=1, line=1.2)
-para("Anil Kewat (B45)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=1, line=1.2)
-para("Nikita Sagar (B50)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=3, line=1.2)
+para("Vivek Rathod (B49)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=3, line=1.2)
 para("(T.Y. B.E., NMIET)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=0, line=1.2, italic=True)
 
 # abstract
@@ -814,8 +799,8 @@ for label, bm in front_entries:
         Inches(TEXT_W), alignment=WD_TAB_ALIGNMENT.RIGHT, leader=WD_TAB_LEADER.DOTS
     )
     run = p.add_run(label)
-    style_run(run, 11.3, bold=True)
-    add_field(p, f"PAGEREF {bm} \\h", "", size=11.3, bold=True, tab_first=True)
+    style_run(run, 11.3)
+    add_field(p, f"PAGEREF {bm} \\h", "", size=11.3, tab_first=True)
 
 spacer(3)
 toc_p = doc.add_paragraph()
@@ -845,49 +830,80 @@ front_heading("LIST OF FIGURES", "bm_lof", break_before=True, size=15.5, after=1
 
 
 def list_table(rows, first_col):
+    """Figure/Table list in the template's bordered, shaded-header style."""
     table = doc.add_table(rows=1, cols=3)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.autofit = False
-    no_borders(table)
-    cell_margins(table, left=0.04, right=0.04, top=0.03, bottom=0.03)
-    widths = (1.15, 3.75, 0.8)
+
+    tbl_pr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{edge}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "6")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), "000000")
+        borders.append(el)
+    tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
+    cell_margins(table, left=0.08, right=0.08, top=0.0, bottom=0.0)
+
+    widths = (1.10, 3.55, 1.05)
     for i, width in enumerate(widths):
         table.columns[i].width = Inches(width)
+
     heading_cells = table.rows[0].cells
     for i, label in enumerate((first_col, "Name", "Page no")):
         cell = heading_cells[i]
         cell.width = Inches(widths[i])
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        shade(cell, "DDEBF7")
         p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        p.paragraph_format.space_before = Pt(2)
-        p.paragraph_format.space_after = Pt(4)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.line_spacing = 1.0
         run = p.add_run(label)
-        style_run(run, 12, bold=True)
+        style_run(run, 13, bold=True)
+    header_row = table.rows[0]._tr.get_or_add_trPr()
+    header_row.append(OxmlElement("w:cantSplit"))
+    height = OxmlElement("w:trHeight")
+    height.set(qn("w:val"), "500")
+    height.set(qn("w:hRule"), "atLeast")
+    header_row.append(height)
+
     for label, name, bm in rows:
         row = table.add_row()
-        row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+        tr_pr = row._tr.get_or_add_trPr()
+        tr_pr.append(OxmlElement("w:cantSplit"))
+        height = OxmlElement("w:trHeight")
+        height.set(qn("w:val"), "460")
+        height.set(qn("w:hRule"), "atLeast")
+        tr_pr.append(height)
         for i, value in enumerate((label, name)):
             cell = row.cells[i]
             cell.width = Inches(widths[i])
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             p = cell.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            p.paragraph_format.space_before = Pt(1)
-            p.paragraph_format.space_after = Pt(1)
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
             p.paragraph_format.line_spacing = 1.0
             run = p.add_run(value)
-            style_run(run, 10.5)
+            style_run(run, 11)
         cell = row.cells[2]
         cell.width = Inches(widths[2])
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
         p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        p.paragraph_format.space_before = Pt(1)
-        p.paragraph_format.space_after = Pt(1)
-        add_field(p, f"PAGEREF {bm} \\h", "", size=10.5)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.line_spacing = 1.0
+        add_field(p, f"PAGEREF {bm} \\h", "", size=11)
     return table
 
 
 list_table(figures, "Figure No")
-spacer(44)
+spacer(24)
 front_heading("LIST OF TABLES", "bm_lot", size=15.5, after=14)
 list_table(tables, "Table No")
 
