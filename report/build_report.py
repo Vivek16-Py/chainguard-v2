@@ -711,29 +711,31 @@ para("Date : ____________________", 10.8, WD_ALIGN_PARAGRAPH.LEFT, after=0, line
 # acknowledgement
 front_heading("ACKNOWLEDGEMENT", "bm_ack", break_before=True, after=18)
 para(
-    "I would like to express my sincere gratitude to our seminar guide, Miss. Sakshi Ambadkar, "
-    "for her continuous guidance, patient review and constructive criticism throughout the "
-    "preparation of this report. Her questions repeatedly pushed us to separate what the "
-    "prototype actually demonstrates from what we hoped it would demonstrate.",
+    "I take this opportunity to express my sincere gratitude to my seminar guide, "
+    "Miss. Sakshi Ambadkar, for her valuable guidance, constant encouragement and "
+    "helpful suggestions throughout the preparation of this seminar on “" + TITLE_DISPLAY + "”.",
     after=10,
 )
 para(
-    "I am thankful to the faculty members and the Department of Computer Science and Engineering "
-    "at NMIET for providing the infrastructure, laboratory access and academic freedom needed to "
-    "design, build and deploy this project. I also acknowledge the open-source communities behind "
-    "React, TypeScript, Vite, Tailwind CSS, Zustand and the Python libraries used to prepare this "
-    "document; their documentation made a small, independent implementation possible.",
+    "I am thankful to the Head of the Department of Computer Science and Engineering, "
+    "Dr. Mahesh Wankhade, and to the Principal of Nutan Maharashtra Institute of "
+    "Engineering and Technology, Talegaon, Dr. Pramod Patil, for providing the "
+    "facilities and the academic environment needed to complete this work. I also "
+    "thank the Subject Incharge and all the teaching and non-teaching staff of the "
+    "department for their support.",
     after=10,
 )
 para(
-    "Finally, I extend my heartfelt thanks to my family, teammates and peers for their constant "
-    "motivation, honest feedback and support during the completion of this seminar. The working "
-    "prototype, the deployment and the demonstration dataset were built collaboratively, and the "
-    "credit for anything that works belongs to the team.",
+    "I am grateful to the researchers and technical resources that helped me "
+    "understand custody control planes, tamper-evident dispatch, unit-exact "
+    "shrinkage reconciliation and last-mile logistics workflows. Finally, I am "
+    "grateful to my parents and friends for their motivation and support during the "
+    "preparation of this report.",
     after=28,
 )
-para("Vivek Rathod (B49)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=3, line=1.2)
-para("(T.Y. B.E., NMIET)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=0, line=1.2, italic=True)
+para("Vivek Rathod", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=1, line=1.2)
+para("Roll No: B49", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=1, line=1.2)
+para("Third Year Computer Science and Engineering", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=0, line=1.2, italic=True)
 
 # abstract
 front_heading("ABSTRACT", "bm_abs", break_before=True, after=18)
