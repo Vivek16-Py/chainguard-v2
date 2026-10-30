@@ -506,60 +506,159 @@ def rest_heading(text, before=22, after=12):
     return front_heading(text, size=15, before=before, after=after)
 
 
+def letterhead():
+    """Institute letterhead with the college and university logos."""
+    table = doc.add_table(rows=1, cols=3)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    no_borders(table)
+    cell_margins(table, left=0.02, right=0.02, top=0.0, bottom=0.0)
+    widths = (0.68, TEXT_W - 1.36, 0.68)
+    for i, width in enumerate(widths):
+        table.columns[i].width = Inches(width)
+
+    for index, filename, width in (
+        (0, "logo_college.png", 0.62),
+        (2, "logo_university.png", 0.58),
+    ):
+        cell = table.rows[0].cells[index]
+        cell.width = Inches(widths[index])
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.line_spacing = 1.0
+        p.add_run().add_picture(str(FIG / filename), width=Inches(width))
+
+    cell = table.rows[0].cells[1]
+    cell.width = Inches(widths[1])
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    lines = (
+        ("Nutan Maharashtra Vidya Prasarak Mandal’s (NMVPM’s)", 9.2),
+        ("NUTAN MAHARASHTRA INSTITUTE OF ENGINEERING AND TECHNOLOGY (NMIET)", 12.4),
+        ("An Autonomous Institute", 12.4),
+        ("Under Administrative Support – Pimpri Chinchwad Education Trust (PCET)", 8.6),
+    )
+    for i, (text, size) in enumerate(lines):
+        p = cell.paragraphs[0] if i == 0 else cell.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        pf = p.paragraph_format
+        pf.space_before = Pt(0)
+        pf.space_after = Pt(0.5)
+        pf.line_spacing = 1.0
+        run = p.add_run(text)
+        style_run(run, size=size, bold=True)
+
+    p = doc.add_paragraph()
+    pf = p.paragraph_format
+    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    pf.space_before = Pt(2)
+    pf.space_after = Pt(0)
+    pf.line_spacing = 1.0
+    pf.tab_stops.add_tab_stop(Inches(TEXT_W / 2), alignment=WD_TAB_ALIGNMENT.CENTER)
+    pf.tab_stops.add_tab_stop(Inches(TEXT_W), alignment=WD_TAB_ALIGNMENT.RIGHT)
+    run = p.add_run("Approved by AICTE\tAccredited by NAAC\tAffiliated to SPPU")
+    style_run(run, size=8.6, bold=True)
+    spacer(10)
+
+
+def student_table(rows, size=11.0):
+    """Borderless name/PRN table used on the title and certificate pages."""
+    table = doc.add_table(rows=1, cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    no_borders(table)
+    cell_margins(table, left=0.05, right=0.05, top=0.01, bottom=0.01)
+    widths = (2.55, 1.15)
+    for i, width in enumerate(widths):
+        table.columns[i].width = Inches(width)
+
+    for i, label in enumerate(("Student Name", "Roll No.")):
+        cell = table.rows[0].cells[i]
+        cell.width = Inches(widths[i])
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(2)
+        run = p.add_run(label)
+        style_run(run, size=size - 0.5, bold=True)
+        bottom_rule(cell, size="4", color="000000")
+
+    for name, prn in rows:
+        row = table.add_row()
+        row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+        for i, value in enumerate((name, prn)):
+            cell = row.cells[i]
+            cell.width = Inches(widths[i])
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            p.paragraph_format.space_before = Pt(1)
+            p.paragraph_format.space_after = Pt(1)
+            p.paragraph_format.line_spacing = 1.0
+            run = p.add_run(value)
+            style_run(run, size=size)
+    spacer(6)
+
+
+def signature_table(rows):
+    """Guide / HOD / Principal signature block."""
+    table = doc.add_table(rows=1, cols=3)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    no_borders(table)
+    cell_margins(table, left=0.02, right=0.02, top=0.0, bottom=0.0)
+    width = TEXT_W / 3
+    for i, (name, role, place) in enumerate(rows):
+        table.columns[i].width = Inches(width)
+        cell = table.rows[0].cells[i]
+        cell.width = Inches(width)
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.BOTTOM
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
+        run = p.add_run(name)
+        style_run(run, 10.8)
+        for text, bold in ((role, True), (place, True)):
+            p2 = cell.add_paragraph()
+            p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p2.paragraph_format.space_before = Pt(1)
+            p2.paragraph_format.space_after = Pt(0)
+            p2.paragraph_format.line_spacing = 1.0
+            run = p2.add_run(text)
+            style_run(run, 10.2, bold=bold)
+
+
 # ---------------------------------------------------------------------------
 # title page
 # ---------------------------------------------------------------------------
-center("A SEMINAR REPORT", 12, True, after=3)
-center("ON", 12, after=5)
-center(TITLE, 14.2, True, after=10, line=1.12)
-center("Project Reference: ChainGuard v2.4", 10.5, True, after=12)
+letterhead()
+center("Technical Seminar Report on", 17, True, after=10)
+center(TITLE, 15, True, after=8, line=1.12)
+center("Project Reference: ChainGuard v2.4", 10.5, True, after=22)
 
-center("SUBMITTED TO THE", 12, True, after=3)
-center("SAVITRIBAI PHULE PUNE UNIVERSITY, PUNE", 12, True, after=7)
-center(
-    "IN THE PARTIAL FULFILLMENT OF THE REQUIREMENTS FOR THE AWARD OF",
-    9.5,
-    after=1,
+center("SUBMITTED TO THE DEPARTMENT OF", 11.5, True, after=2)
+center("COMPUTER SCIENCE & ENGINEERING", 11.5, True, after=28)
+
+center("SUBMITTED BY", 13, True, after=10)
+student_table(
+    (
+        ("Ms. Pallavi Kokate", "B34"),
+        ("Mr. Anil Kewat", "B45"),
+        ("Ms. Nikita Sagar", "B50"),
+    )
 )
-center("THE DEGREE OF", 9.5, after=1)
-center("THIRD YEAR COMPUTER SCIENCE AND ENGINEERING", 12, True, after=11)
 
-center("BY", 12, True, after=4)
-center("Ms. Pallavi Kokate (B34)  •  Mr. Anil Kewat (B45)  •  Ms. Nikita Sagar (B50)", 12, after=2)
-center("Roll No: B34 / B45 / B50", 10.5, after=24)
+center("Under The Guidance of", 13.5, True, before=26, after=4)
+center("Miss. Sakshi Ambadkar", 13.5, True, after=100)
 
-center("UNDER THE GUIDANCE OF", 12, True, after=4)
-center("Miss. Sakshi Ambadkar", 12, True, after=20)
-
-center("Nutan Maharashtra Vidya Prasarak Mandal’s", 10.5, after=2)
-center("NUTAN MAHARASHTRA INSTITUTE OF ENGINEERING & TECHNOLOGY, PUNE", 12, True, after=2, line=1.05)
-
-logo_tbl = doc.add_table(rows=1, cols=2)
-logo_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-logo_tbl.autofit = False
-no_borders(logo_tbl)
-cell_margins(logo_tbl, left=0.02, right=0.02, top=0.0, bottom=0.0)
-for index, (filename, width) in enumerate(
-    (("logo_college.png", 0.55), ("logo_university.png", 0.50))
-):
-    cell = logo_tbl.rows[0].cells[index]
-    cell.width = Inches(1.0)
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    p = cell.paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(0)
-    p.paragraph_format.line_spacing = 1.0
-    p.add_run().add_picture(str(FIG / filename), width=Inches(width))
-
+center("ACADEMIC YEAR : 2026–27", 13.5, True, after=10)
 center(
     "Samarth Vidya Sankul, Vishnupuri, Talegaon Dabhade, Maharashtra 410507",
-    9.5,
-    before=4,
-    after=2,
+    8.8,
+    after=0,
 )
-center("Department of Computer Science and Engineering", 10, True, after=22)
-center("ACADEMIC YEAR : 2026–27", 11, True, after=0)
 
 # ---------------------------------------------------------------------------
 # front matter section: Roman numerals, footer only
@@ -570,64 +669,57 @@ set_page_numbering(front, "upperRoman", 1)
 add_page_number_footer(front)
 
 # certificate
-front_heading("CERTIFICATE", "bm_cert", after=22)
-p = para(
-    "This is to certify that the seminar entitled ",
-    align=WD_ALIGN_PARAGRAPH.JUSTIFY,
-    after=0,
-    keep=True,
-)
-run = p.add_run("“" + TITLE_DISPLAY + "”")
-style_run(run, size=BODY_SIZE, bold=True)
-run = p.add_run(
-    " submitted by Ms. Pallavi Kokate (B34), Mr. Anil Kewat (B45) and "
-    "Ms. Nikita Sagar (B50), students of Third Year Computer Science and Engineering, "
-    "is a bonafide work carried out by them under the supervision of "
-    "Miss. Sakshi Ambadkar, and it is approved for the partial fulfillment of the "
-    "requirement of Savitribai Phule Pune University, Pune for the award of the "
-    "degree of Third Year Computer Science and Engineering."
-)
-style_run(run, size=BODY_SIZE)
-p.paragraph_format.space_after = Pt(9)
-
+letterhead()
+front_heading("CERTIFICATE", "bm_cert", size=18, after=16)
 para(
-    "The seminar work has not been earlier submitted to any other institute or "
-    "university for the award of degree.",
-    after=18,
+    "This is to certify that the technical seminar report",
+    11.5,
+    WD_ALIGN_PARAGRAPH.CENTER,
+    after=7,
+)
+para(
+    "“" + TITLE_DISPLAY + "”",
+    12,
+    WD_ALIGN_PARAGRAPH.CENTER,
+    after=7,
+    line=1.15,
+    bold_all=True,
+)
+para("Submitted by", 11.5, WD_ALIGN_PARAGRAPH.CENTER, after=5)
+student_table(
+    (
+        ("Ms. Pallavi Kokate", "B34"),
+        ("Mr. Anil Kewat", "B45"),
+        ("Ms. Nikita Sagar", "B50"),
+    ),
+    size=11,
+)
+para(
+    "Has completed the technical seminar report satisfactorily in the subject of "
+    "Technical Seminar (ELC342CSE) for the academic year 2026–2027 as prescribed in "
+    "the syllabus of Savitribai Phule Pune University, Pune.",
+    11,
+    after=6,
+)
+para(
+    "The work was carried out under the guidance of Miss. Sakshi Ambadkar and has "
+    "not been submitted earlier to any other institute or university for the award "
+    "of a degree.",
+    11,
+    after=0,
 )
 
-spacer(88)
-sig = doc.add_table(rows=1, cols=3)
-sig.alignment = WD_TABLE_ALIGNMENT.CENTER
-sig.autofit = False
-no_borders(sig)
-for i, (name, label) in enumerate(
+spacer(118)
+signature_table(
     (
-        ("Prof. Sakshi Ambadkar", "(Seminar Guide)"),
-        ("Dr. Mahesh Wankhede", "HOD"),
-        ("Dr. Pramod Patil", "Principal"),
+        ("Miss. Sakshi Ambadkar", "Seminar Guide", "Dept. of CSE"),
+        ("Dr. Mahesh Wankhede", "HOD", "Dept. of CSE"),
+        ("Dr. Pramod Patil", "Principal", "NMIET Pune"),
     )
-):
-    sig.columns[i].width = Inches(TEXT_W / 3)
-    cell = sig.rows[0].cells[i]
-    cell.width = Inches(TEXT_W / 3)
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.BOTTOM
-    p = cell.paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(0)
-    run = p.add_run(name)
-    style_run(run, 11.3, bold=True)
-    p2 = cell.add_paragraph()
-    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p2.paragraph_format.space_before = Pt(2)
-    p2.paragraph_format.space_after = Pt(0)
-    run = p2.add_run(label)
-    style_run(run, 10.5)
-
-spacer(80)
-para("Place : Pune", 11.3, WD_ALIGN_PARAGRAPH.LEFT, after=2, line=1.2)
-para("Date : ____________________", 11.3, WD_ALIGN_PARAGRAPH.LEFT, after=0, line=1.2)
+)
+spacer(22)
+para("Place : Pune", 10.8, WD_ALIGN_PARAGRAPH.LEFT, after=1, line=1.1)
+para("Date : ____________________", 10.8, WD_ALIGN_PARAGRAPH.LEFT, after=0, line=1.1)
 
 # acknowledgement
 front_heading("ACKNOWLEDGEMENT", "bm_ack", break_before=True, after=18)
@@ -636,7 +728,7 @@ para(
     "for her continuous guidance, patient review and constructive criticism throughout the "
     "preparation of this report. Her questions repeatedly pushed us to separate what the "
     "prototype actually demonstrates from what we hoped it would demonstrate.",
-    after=8,
+    after=10,
 )
 para(
     "I am thankful to the faculty members and the Department of Computer Science and Engineering "
@@ -644,23 +736,19 @@ para(
     "design, build and deploy this project. I also acknowledge the open-source communities behind "
     "React, TypeScript, Vite, Tailwind CSS, Zustand and the Python libraries used to prepare this "
     "document; their documentation made a small, independent implementation possible.",
-    after=8,
+    after=10,
 )
 para(
     "Finally, I extend my heartfelt thanks to my family, teammates and peers for their constant "
     "motivation, honest feedback and support during the completion of this seminar. The working "
     "prototype, the deployment and the demonstration dataset were built collaboratively, and the "
     "credit for anything that works belongs to the team.",
-    after=20,
+    after=28,
 )
-para(
-    "Pallavi Kokate, Anil Kewat and Nikita Sagar",
-    11.3,
-    WD_ALIGN_PARAGRAPH.RIGHT,
-    after=0,
-    line=1.2,
-    italic=True,
-)
+para("Pallavi Kokate (B34)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=1, line=1.2)
+para("Anil Kewat (B45)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=1, line=1.2)
+para("Nikita Sagar (B50)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=3, line=1.2)
+para("(T.Y. B.E., NMIET)", 11, WD_ALIGN_PARAGRAPH.RIGHT, after=0, line=1.2, italic=True)
 
 # abstract
 front_heading("ABSTRACT", "bm_abs", break_before=True, after=18)
@@ -803,8 +891,12 @@ spacer(44)
 front_heading("LIST OF TABLES", "bm_lot", size=15.5, after=14)
 list_table(tables, "Table No")
 
-# abbreviations
-front_heading("LIST OF ABBREVIATIONS", "bm_abbr", break_before=True, after=14)
+# abbreviations (own section so the running header appears above the list)
+abbr_section = new_section()
+add_running_header(abbr_section)
+add_page_number_footer(abbr_section)
+set_page_numbering(abbr_section, "upperRoman")
+front_heading("LIST OF ABBREVIATIONS", "bm_abbr", after=14)
 abbreviations = [
     ("API", "Application Programming Interface"),
     ("CDN", "Content Delivery Network"),
