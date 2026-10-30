@@ -951,19 +951,36 @@ abbreviations = [
 abbr = doc.add_table(rows=1, cols=2)
 abbr.alignment = WD_TABLE_ALIGNMENT.CENTER
 abbr.autofit = False
-no_borders(abbr)
+
+tbl_pr = abbr._tbl.tblPr
+borders = OxmlElement("w:tblBorders")
+for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+    el = OxmlElement(f"w:{edge}")
+    el.set(qn("w:val"), "single")
+    el.set(qn("w:sz"), "6")
+    el.set(qn("w:space"), "0")
+    el.set(qn("w:color"), "000000")
+    borders.append(el)
+tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
+
 cell_margins(abbr, left=0.04, right=0.04, top=0.03, bottom=0.03)
+
 for i, width in enumerate((1.05, 4.65)):
     abbr.columns[i].width = Inches(width)
+
+# Shade header row and set header font
+heading_cells = abbr.rows[0].cells
 for i, label in enumerate(("Abbreviation", "Full Form")):
-    cell = abbr.rows[0].cells[i]
+    cell = heading_cells[i]
     cell.width = Inches((1.05, 4.65)[i])
+    shade(cell, "DDEBF7")
     p = cell.paragraphs[0]
     p.paragraph_format.space_before = Pt(2)
     p.paragraph_format.space_after = Pt(3)
+    p.paragraph_format.line_spacing = 1.0
     run = p.add_run(label)
-    style_run(run, TABLE_SIZE, bold=True)
-    bottom_rule(cell, size="6", color="000000")
+    style_run(run, 9.5, bold=True)
+
 for short, full in abbreviations:
     row = abbr.add_row()
     row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
@@ -975,7 +992,7 @@ for short, full in abbreviations:
         p.paragraph_format.space_after = Pt(1)
         p.paragraph_format.line_spacing = 1.0
         run = p.add_run(value)
-        style_run(run, 10, bold=(i == 0))
+        style_run(run, 9.9)
 
 
 # ---------------------------------------------------------------------------
