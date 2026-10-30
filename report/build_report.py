@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Build the ChainGuard v2 technical seminar report as an editable DOCX."""
+"""Build the ChainGuard v2 seminar report using the NMIET report template."""
 
 import re
 import sys
 from pathlib import Path
 
 from docx import Document
+from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
@@ -31,9 +32,43 @@ TITLE = (
     "SEALED DISPATCH, CUSTOMER-AUTHORISED CUSTODY BREAKS AND UNIT-EXACT "
     "SHRINKAGE RECONCILIATION"
 )
-SHORT_TITLE = (
+SHORT_TITLE = "CHAINGUARD V2: A TAMPER-EVIDENT LAST-MILE LOGISTICS CONTROL PLANE"
+TITLE_DISPLAY = (
+    "ChainGuard v2: A Tamper-Evident Last-Mile Logistics Control Plane for Sealed "
+    "Dispatch, Customer-Authorised Custody Breaks and Unit-Exact Shrinkage Reconciliation"
+)
+RUNNING_HEAD = (
     "CHAINGUARD V2: A TAMPER-EVIDENT LAST-MILE LOGISTICS CONTROL PLANE"
 )
+INSTITUTION = "NMIET, Computer Science and Engineering"
+
+# template geometry (US Letter, see Seminar_Report_Edited_Header.pdf)
+PAGE_W = 8.5
+PAGE_H = 11.0
+MARGIN_L = 1.45
+MARGIN_R = 1.35
+MARGIN_T = 1.0
+MARGIN_B = 1.0
+TEXT_W = PAGE_W - MARGIN_L - MARGIN_R
+
+BODY_SIZE = 10.8
+BODY_LINE = 1.14
+CAPTION_SIZE = 10.4
+TABLE_SIZE = 9.9
+
+CHAPTER_TITLES = {
+    "1": "1. Introduction",
+    "2": "2. Literature Survey",
+    "3": "3. Overview of the ChainGuard v2 Control Plane",
+    "4": "4. Working / Methodology",
+    "5": "5. Applications",
+    "6": "6. Advantages and Limitations",
+    "7": "7. Comparison with Existing Technologies",
+    "8": "8. Future Scope",
+    "9": "9. Conclusion",
+}
+
+_bookmark_id = [1000]
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +83,7 @@ def set_rfonts(rpr, name):
         rf.set(qn(attr), name)
 
 
-def style_run(run, size=12, bold=None, italic=None, name=BODY_FONT, color=None):
+def style_run(run, size=11.3, bold=None, italic=None, name=BODY_FONT, color=None, caps=False):
     run.font.name = name
     run.font.size = Pt(size)
     if bold is not None:
@@ -57,13 +92,15 @@ def style_run(run, size=12, bold=None, italic=None, name=BODY_FONT, color=None):
         run.italic = italic
     if color:
         run.font.color.rgb = RGBColor.from_string(color)
+    if caps:
+        run.font.all_caps = True
     set_rfonts(run._element.get_or_add_rPr(), name)
 
 
 TOKEN = re.compile(r"(\*\*.+?\*\*|`[^`]+`)")
 
 
-def add_rich(paragraph, text, size=12, italic=False, bold_all=False):
+def add_rich(paragraph, text, size=BODY_SIZE, italic=False, bold_all=False):
     for part in TOKEN.split(text):
         if not part:
             continue
@@ -72,33 +109,80 @@ def add_rich(paragraph, text, size=12, italic=False, bold_all=False):
             style_run(run, size=size, bold=True, italic=italic or None)
         elif part.startswith("`") and part.endswith("`") and len(part) > 2:
             run = paragraph.add_run(part[1:-1])
-            style_run(run, size=max(size - 1.5, 7.5), name=MONO_FONT, bold=bold_all or None, italic=italic or None)
+            style_run(
+                run,
+                size=max(size - 1.6, 7.8),
+                name=MONO_FONT,
+                bold=bold_all or None,
+                italic=italic or None,
+            )
         else:
             run = paragraph.add_run(part)
             style_run(run, size=size, bold=bold_all or None, italic=italic or None)
 
 
-_PENDING_BREAK = {"pending": False}
+CAP_RE = re.compile(r"^(Figure|Table)\s+(\d+\.\d+)[.:]\s*(.*?)(?:\.)?$")
 
 
-def start_page():
-    """Begin the next paragraph on a fresh page without an empty break paragraph."""
-    _PENDING_BREAK["pending"] = True
+def caption_parts(text):
+    match = CAP_RE.match(text.strip())
+    if not match:
+        return text.strip(), text.strip()
+    return f"{match.group(1)} {match.group(2)}", match.group(3).rstrip(".")
 
 
-def _consume_break(paragraph):
-    if _PENDING_BREAK["pending"]:
-        paragraph.paragraph_format.page_break_before = True
-        _PENDING_BREAK["pending"] = False
+def caption_text(text):
+    label, body = caption_parts(text)
+    return f"{label}: {body}"
+
+
+def add_bookmark(paragraph, name):
+    _bookmark_id[0] += 1
+    ident = str(_bookmark_id[0])
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), ident)
+    start.set(qn("w:name"), name)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), ident)
+    paragraph._p.insert(0, start)
+    paragraph._p.append(end)
+
+
+def add_field(paragraph, instruction, placeholder="", size=BODY_SIZE, bold=None, tab_first=False):
+    if tab_first:
+        run = paragraph.add_run("\t")
+        style_run(run, size=size)
+    run = paragraph.add_run()
+    style_run(run, size=size, bold=bold)
+    begin = OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = f" {instruction} "
+    separate = OxmlElement("w:fldChar")
+    separate.set(qn("w:fldCharType"), "separate")
+    text_el = OxmlElement("w:t")
+    text_el.text = placeholder
+    end = OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"), "end")
+    for element in (begin, instr, separate, text_el, end):
+        run._r.append(element)
+    return run
+
+
+def right_tab(paragraph):
+    paragraph.paragraph_format.tab_stops.add_tab_stop(
+        Inches(TEXT_W), alignment=WD_TAB_ALIGNMENT.RIGHT, leader=WD_TAB_LEADER.DOTS
+    )
 
 
 def para(
     text="",
-    size=12,
+    size=BODY_SIZE,
     align=WD_ALIGN_PARAGRAPH.JUSTIFY,
     before=0,
     after=3,
-    line=1.02,
+    line=BODY_LINE,
     left=0.0,
     first=0.0,
     keep=False,
@@ -120,20 +204,18 @@ def para(
     pf.keep_with_next = keep
     if text:
         add_rich(p, text, size=size, italic=italic, bold_all=bold_all)
-    _consume_break(p)
     return p
 
 
-def center(text, size=12, bold=False, before=0, after=0, italic=False, line=1.0, caps=False):
+def center(text, size=BODY_SIZE, bold=False, before=0, after=0, italic=False, line=1.0, caps=False):
     p = doc.add_paragraph()
     pf = p.paragraph_format
     pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
     pf.space_before = Pt(before)
     pf.space_after = Pt(after)
     pf.line_spacing = line
-    run = p.add_run(text.upper() if caps else text)
-    style_run(run, size=size, bold=bold, italic=italic)
-    _consume_break(p)
+    run = p.add_run(text)
+    style_run(run, size=size, bold=bold, italic=italic, caps=caps)
     return p
 
 
@@ -148,7 +230,7 @@ def spacer(points=6):
     return p
 
 
-def add_item(marker, text, size=12, left=0.38, hang=0.28, after=1):
+def add_item(marker, text, size=BODY_SIZE, left=0.36, hang=0.26, after=0.5):
     p = doc.add_paragraph()
     pf = p.paragraph_format
     pf.left_indent = Inches(left)
@@ -156,7 +238,7 @@ def add_item(marker, text, size=12, left=0.38, hang=0.28, after=1):
     pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
     pf.space_before = Pt(0)
     pf.space_after = Pt(after)
-    pf.line_spacing = 1.02
+    pf.line_spacing = BODY_LINE
     pf.tab_stops.add_tab_stop(Inches(left))
     run = p.add_run(marker + "\t")
     style_run(run, size=size)
@@ -173,7 +255,7 @@ def shade(cell, fill):
     tc_pr.append(shd)
 
 
-def cell_margins(table, left=0.07, right=0.07, top=0.02, bottom=0.02):
+def cell_margins(table, left=0.06, right=0.06, top=0.02, bottom=0.02):
     tbl_pr = table._tbl.tblPr
     mar = OxmlElement("w:tblCellMar")
     for side, value in (("top", top), ("left", left), ("bottom", bottom), ("right", right)):
@@ -182,19 +264,6 @@ def cell_margins(table, left=0.07, right=0.07, top=0.02, bottom=0.02):
         el.set(qn("w:type"), "dxa")
         mar.append(el)
     tbl_pr.insert_element_before(mar, "w:tblLook")
-
-
-def table_borders(table, color="A6A6A6", size="4"):
-    tbl_pr = table._tbl.tblPr
-    borders = OxmlElement("w:tblBorders")
-    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        el = OxmlElement(f"w:{edge}")
-        el.set(qn("w:val"), "single")
-        el.set(qn("w:sz"), size)
-        el.set(qn("w:space"), "0")
-        el.set(qn("w:color"), color)
-        borders.append(el)
-    tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
 
 
 def no_borders(table):
@@ -207,291 +276,125 @@ def no_borders(table):
     tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
 
 
-def add_page_border(section, color="404040", size=8, space=18):
-    """Draw a double rule around every page in the section."""
+def bottom_rule(cell, size="4", color="808080"):
+    tc_pr = cell._tc.get_or_add_tcPr()
+    borders = OxmlElement("w:tcBorders")
+    el = OxmlElement("w:bottom")
+    el.set(qn("w:val"), "single")
+    el.set(qn("w:sz"), size)
+    el.set(qn("w:space"), "0")
+    el.set(qn("w:color"), color)
+    borders.append(el)
+    tc_pr.append(borders)
+
+
+def add_page_border(section):
+    """Double rule around the page, matching the template's two-line frame."""
     sect_pr = section._sectPr
-    pg_borders = sect_pr.find(qn("w:pgBorders"))
-    if pg_borders is None:
-        pg_borders = OxmlElement("w:pgBorders")
-        pg_borders.set(qn("w:offsetFrom"), "page")
-        pg_mar = sect_pr.find(qn("w:pgMar"))
-        if pg_mar is not None:
-            pg_mar.addnext(pg_borders)
-        else:
-            sect_pr.append(pg_borders)
+    old = sect_pr.find(qn("w:pgBorders"))
+    if old is not None:
+        sect_pr.remove(old)
+    pg_borders = OxmlElement("w:pgBorders")
+    pg_borders.set(qn("w:offsetFrom"), "page")
     for edge in ("top", "left", "bottom", "right"):
         element = OxmlElement(f"w:{edge}")
-        element.set(qn("w:val"), "double")
-        element.set(qn("w:sz"), str(size))
-        element.set(qn("w:space"), str(space))
-        element.set(qn("w:color"), color)
+        element.set(qn("w:val"), "thickThinMediumGap")
+        element.set(qn("w:sz"), "12")
+        element.set(qn("w:space"), "31" if edge in ("left", "right") else "24")
+        element.set(qn("w:color"), "000000")
         pg_borders.append(element)
+    sect_pr.insert_element_before(pg_borders, "w:lnNumType", "w:pgNumType", "w:cols", "w:titlePg")
 
 
-def title_logo_header():
-    """College and university logos flanking the institution name."""
-    table = doc.add_table(rows=1, cols=3)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = False
-    no_borders(table)
-    cell_margins(table, left=0.02, right=0.02, top=0.0, bottom=0.0)
-    widths = (0.9, 4.5, 0.9)
-    for index, width in enumerate(widths):
-        table.columns[index].width = Inches(width)
-    row = table.rows[0]
-    row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
-
-    for index, filename, width in ((0, "logo_college.png", 0.74), (2, "logo_university.png", 0.68)):
-        cell = row.cells[index]
-        cell.width = Inches(widths[index])
-        cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.paragraph_format.space_before = Pt(0)
-        p.paragraph_format.space_after = Pt(0)
-        p.paragraph_format.line_spacing = 1.0
-        p.add_run().add_picture(str(FIG / filename), width=Inches(width))
-
-    cell = row.cells[1]
-    cell.width = Inches(widths[1])
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    lines = [
-        ("Nutan Maharashtra Vidya Prasarak Mandal’s (NMVPM’s)", 10, True),
-        ("NUTAN MAHARASHTRA INSTITUTE OF ENGINEERING AND TECHNOLOGY (NMIET)", 10.5, True),
-        ("Under Administrative Support - Pimpri Chinchwad Education Trust (PCET)", 8.5, False),
-        ("Computer Science and Engineering Department", 10, True),
-    ]
-    for index, (text, size, bold) in enumerate(lines):
-        p = cell.paragraphs[0] if index == 0 else cell.add_paragraph()
-        pf = p.paragraph_format
-        pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        pf.space_before = Pt(0)
-        pf.space_after = Pt(1 if index < len(lines) - 1 else 0)
-        pf.line_spacing = 1.0
-        run = p.add_run(text)
-        style_run(run, size=size, bold=bold)
-    return table
+def set_page_numbering(section, fmt=None, start=None):
+    sect_pr = section._sectPr
+    old = sect_pr.find(qn("w:pgNumType"))
+    if old is not None:
+        sect_pr.remove(old)
+    if fmt is None and start is None:
+        return
+    pg = OxmlElement("w:pgNumType")
+    if fmt:
+        pg.set(qn("w:fmt"), fmt)
+    if start is not None:
+        pg.set(qn("w:start"), str(start))
+    sect_pr.insert_element_before(
+        pg, "w:cols", "w:formProt", "w:vAlign", "w:noEndnote", "w:titlePg",
+        "w:textDirection", "w:bidi", "w:rtlGutter", "w:docGrid", "w:printerSettings"
+    )
 
 
-def set_cell(cell, text, size=9, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT, fill=None, color=None):
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    p = cell.paragraphs[0]
-    pf = p.paragraph_format
-    pf.alignment = align
-    pf.space_before = Pt(1)
-    pf.space_after = Pt(1)
-    pf.line_spacing = 1.0
-    for run in list(p.runs):
-        run._element.getparent().remove(run._element)
-    add_rich(p, str(text), size=size, bold_all=bold)
-    if color:
-        for run in p.runs:
-            run.font.color.rgb = RGBColor.from_string(color)
-    if fill:
-        shade(cell, fill)
+def config_section(section):
+    section.page_width = Inches(PAGE_W)
+    section.page_height = Inches(PAGE_H)
+    section.left_margin = Inches(MARGIN_L)
+    section.right_margin = Inches(MARGIN_R)
+    section.top_margin = Inches(MARGIN_T)
+    section.bottom_margin = Inches(MARGIN_B)
+    section.header_distance = Inches(0.10)
+    section.footer_distance = Inches(0.16)
+    add_page_border(section)
 
 
-def add_caption(text):
-    p = doc.add_paragraph()
+def add_page_number_footer(section, first_page=False):
+    footer = section.first_page_footer if first_page else section.footer
+    footer.is_linked_to_previous = False
+    p = footer.paragraphs[0]
+    p.clear()
     pf = p.paragraph_format
     pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    pf.space_before = Pt(9)
-    pf.space_after = Pt(4)
+    pf.space_before = Pt(0)
+    pf.space_after = Pt(0)
     pf.line_spacing = 1.0
-    pf.keep_with_next = True
-    run = p.add_run(text)
-    style_run(run, size=10.5, bold=True)
-    return p
+    pf.tab_stops.clear_all()
+    pf.tab_stops.add_tab_stop(Inches(TEXT_W), alignment=WD_TAB_ALIGNMENT.RIGHT)
+    run = p.add_run(INSTITUTION)
+    style_run(run, size=10)
+    add_field(p, "PAGE", "1", size=10, tab_first=True)
 
 
-def add_table(spec):
-    caption = add_caption(spec["caption"])
-    if spec.get("new_page"):
-        caption.paragraph_format.page_break_before = True
-    headers = spec["headers"]
-    rows = spec["rows"]
-    widths = spec["widths"]
-    size = spec.get("size", 8.8)
-
-    table = doc.add_table(rows=1, cols=len(headers))
-    table.style = "Table Grid"
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = False
-    table_borders(table)
-    cell_margins(table)
-
-    for i, width in enumerate(widths):
-        table.columns[i].width = Inches(width)
-
-    header = table.rows[0]
-    tr_pr = header._tr.get_or_add_trPr()
-    tr_pr.append(OxmlElement("w:tblHeader"))
-    tr_pr.append(OxmlElement("w:cantSplit"))
-    for i, label in enumerate(headers):
-        cell = header.cells[i]
-        cell.width = Inches(widths[i])
-        set_cell(cell, label, size=size, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER, fill="E7E6E6")
-
-    for index, values in enumerate(rows):
-        row = table.add_row()
-        tr_pr = row._tr.get_or_add_trPr()
-        tr_pr.append(OxmlElement("w:cantSplit"))
-        for i, value in enumerate(values):
-            cell = row.cells[i]
-            cell.width = Inches(widths[i])
-            set_cell(cell, value, size=size)
-            if index < len(rows) - 1:
-                cell.paragraphs[0].paragraph_format.keep_with_next = True
-    spacer(3)
-
-
-def add_figure(filename, caption):
-    p = doc.add_paragraph()
+def add_running_header(section, chapter_label=None, first_page=False):
+    header = section.first_page_header if first_page else section.header
+    header.is_linked_to_previous = False
+    p = header.paragraphs[0]
+    p.clear()
     pf = p.paragraph_format
     pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    pf.space_before = Pt(6)
-    pf.space_after = Pt(2)
-    pf.line_spacing = 1.0
-    pf.keep_with_next = True
-    run = p.add_run()
-    run.add_picture(str(FIG / filename), width=Inches(5.0))
-
-    cap = doc.add_paragraph()
-    pf = cap.paragraph_format
-    pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
     pf.space_before = Pt(0)
-    pf.space_after = Pt(9)
+    pf.space_after = Pt(14 if chapter_label else 0)
     pf.line_spacing = 1.0
-    run = cap.add_run(caption)
-    style_run(run, size=10, italic=True)
-
-
-def add_formula(lines):
-    for line in lines:
-        p = doc.add_paragraph()
-        pf = p.paragraph_format
-        pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        pf.space_before = Pt(2)
-        pf.space_after = Pt(2)
-        pf.line_spacing = 1.15
-        run = p.add_run(line)
-        style_run(run, size=11.5, italic=True)
-
-
-def add_code(lines):
-    table = doc.add_table(rows=1, cols=1)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = False
-    table.columns[0].width = Inches(5.9)
-    table_borders(table, color="CBD5E1", size="4")
-    cell_margins(table, left=0.12, right=0.12, top=0.08, bottom=0.08)
-    tr_pr = table.rows[0]._tr.get_or_add_trPr()
-    tr_pr.append(OxmlElement("w:cantSplit"))
-    cell = table.rows[0].cells[0]
-    cell.width = Inches(5.9)
-    shade(cell, "F8FAFC")
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    cell.paragraphs[0]._p.getparent().remove(cell.paragraphs[0]._p)
-    for line in lines:
-        p = cell.add_paragraph()
-        pf = p.paragraph_format
+    run = p.add_run(RUNNING_HEAD)
+    style_run(run, size=9.5, bold=True, caps=True)
+    if chapter_label:
+        p2 = header.add_paragraph()
+        pf = p2.paragraph_format
+        pf.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        pf.right_indent = Inches(-0.62)
         pf.space_before = Pt(0)
         pf.space_after = Pt(0)
         pf.line_spacing = 1.0
-        pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        run = p.add_run(line if line else " ")
-        style_run(run, size=8.8, name=MONO_FONT)
-    spacer(4)
+        run = p2.add_run(chapter_label)
+        style_run(run, size=12, bold=True)
 
 
-def add_callout(text):
-    table = doc.add_table(rows=1, cols=1)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.autofit = False
-    table.columns[0].width = Inches(5.9)
-    tbl_pr = table._tbl.tblPr
-    borders = OxmlElement("w:tblBorders")
-    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        el = OxmlElement(f"w:{edge}")
-        if edge == "left":
-            el.set(qn("w:val"), "single")
-            el.set(qn("w:sz"), "18")
-            el.set(qn("w:color"), "BE123C")
-        else:
-            el.set(qn("w:val"), "nil")
-        el.set(qn("w:space"), "0")
-        borders.append(el)
-    tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
-    cell_margins(table, left=0.14, right=0.12, top=0.08, bottom=0.08)
-    tr_pr = table.rows[0]._tr.get_or_add_trPr()
-    tr_pr.append(OxmlElement("w:cantSplit"))
-    cell = table.rows[0].cells[0]
-    cell.width = Inches(5.9)
-    shade(cell, "FFF1F2")
-    p = cell.paragraphs[0]
-    pf = p.paragraph_format
-    pf.space_before = Pt(1)
-    pf.space_after = Pt(1)
-    pf.line_spacing = 1.15
-    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    add_rich(p, text, size=10.5)
-    spacer(7)
+def blank_header(section):
+    header = section.header
+    header.is_linked_to_previous = False
+    for p in header.paragraphs:
+        p.clear()
 
 
-def add_field(paragraph, instruction, placeholder=""):
-    run = paragraph.add_run()
-    begin = OxmlElement("w:fldChar")
-    begin.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
-    instr.text = f" {instruction} "
-    separate = OxmlElement("w:fldChar")
-    separate.set(qn("w:fldCharType"), "separate")
-    text_el = OxmlElement("w:t")
-    text_el.text = placeholder
-    end = OxmlElement("w:fldChar")
-    end.set(qn("w:fldCharType"), "end")
-    for element in (begin, instr, separate, text_el, end):
-        run._r.append(element)
-    return run
-
-
-def add_page_number_footer(section):
+def blank_footer(section):
     footer = section.footer
-    p = footer.paragraphs[0]
-    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    pf = p.paragraph_format
-    pf.space_before = Pt(0)
-    pf.space_after = Pt(0)
-    run = p.add_run()
-    style_run(run, size=12)
-    begin = OxmlElement("w:fldChar")
-    begin.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
-    instr.text = " PAGE "
-    separate = OxmlElement("w:fldChar")
-    separate.set(qn("w:fldCharType"), "separate")
-    text_el = OxmlElement("w:t")
-    text_el.text = "1"
-    end = OxmlElement("w:fldChar")
-    end.set(qn("w:fldCharType"), "end")
-    for element in (begin, instr, separate, text_el, end):
-        run._r.append(element)
+    footer.is_linked_to_previous = False
+    for p in footer.paragraphs:
+        p.clear()
 
 
-def front_heading(text, center_it=False):
-    p = doc.add_paragraph()
-    pf = p.paragraph_format
-    pf.alignment = WD_ALIGN_PARAGRAPH.CENTER if center_it else WD_ALIGN_PARAGRAPH.LEFT
-    pf.space_before = Pt(0)
-    pf.space_after = Pt(12)
-    pf.line_spacing = 1.0
-    pf.keep_with_next = True
-    run = p.add_run(text)
-    style_run(run, size=15, bold=True)
-    _consume_break(p)
-    return p
+def new_section():
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    config_section(section)
+    return section
 
 
 # ---------------------------------------------------------------------------
@@ -499,29 +402,24 @@ def front_heading(text, center_it=False):
 # ---------------------------------------------------------------------------
 doc = Document()
 
-section = doc.sections[0]
-section.page_width = Inches(8.5)
-section.page_height = Inches(11)
-section.left_margin = Inches(1.1)
-section.right_margin = Inches(1.1)
-section.top_margin = Inches(0.9)
-section.bottom_margin = Inches(0.9)
-section.footer_distance = Inches(0.45)
-section.header_distance = Inches(0.5)
+first = doc.sections[0]
+config_section(first)
+blank_header(first)
+blank_footer(first)
 
 styles = doc.styles
 normal = styles["Normal"]
 normal.font.name = BODY_FONT
-normal.font.size = Pt(12)
+normal.font.size = Pt(BODY_SIZE)
 set_rfonts(normal.element.get_or_add_rPr(), BODY_FONT)
 npf = normal.paragraph_format
 npf.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-npf.line_spacing = 1.02
+npf.line_spacing = BODY_LINE
 npf.space_before = Pt(0)
 npf.space_after = Pt(3)
 
 
-def config_heading(name, size, before, after, italic=False):
+def config_heading(name, size, before, after, italic=False, align=WD_ALIGN_PARAGRAPH.LEFT):
     st = styles[name]
     st.font.name = BODY_FONT
     st.font.size = Pt(size)
@@ -538,18 +436,47 @@ def config_heading(name, size, before, after, italic=False):
     pf = st.paragraph_format
     pf.space_before = Pt(before)
     pf.space_after = Pt(after)
-    pf.line_spacing = 1.15
+    pf.line_spacing = 1.05
     pf.keep_with_next = True
     pf.keep_together = True
-    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    pf.alignment = align
 
 
-config_heading("Heading 1", 15, 12, 6)
-config_heading("Heading 2", 12.5, 8, 3)
+config_heading("Heading 1", 15, 0, 10)
+config_heading("Heading 2", 13.2, 8, 3)
 config_heading("Heading 3", 11.5, 6, 2, italic=True)
 
-add_page_number_footer(section)
-add_page_border(section)
+# Footer style in the default template carries a centre tab; replace it so the
+# page number sits at the right margin like the reference layout.
+try:
+    footer_style = styles["Footer"]
+    footer_style.paragraph_format.tab_stops.clear_all()
+    footer_style.paragraph_format.tab_stops.add_tab_stop(
+        Inches(TEXT_W), alignment=WD_TAB_ALIGNMENT.RIGHT
+    )
+except KeyError:
+    pass
+
+# TOC styles used by Word when the field is refreshed
+from docx.enum.style import WD_STYLE_TYPE  # noqa: E402
+
+for toc_name, bold in (("TOC 1", True), ("TOC 2", False)):
+    try:
+        tst = styles[toc_name]
+    except KeyError:
+        tst = styles.add_style(toc_name, WD_STYLE_TYPE.PARAGRAPH)
+    tst.font.name = BODY_FONT
+    tst.font.size = Pt(11.3)
+    tst.font.bold = bold
+    tst.font.color.rgb = RGBColor(0, 0, 0)
+    set_rfonts(tst.element.get_or_add_rPr(), BODY_FONT)
+    tpf = tst.paragraph_format
+    tpf.space_before = Pt(0)
+    tpf.space_after = Pt(2)
+    tpf.line_spacing = 1.05
+    tpf.tab_stops.add_tab_stop(
+        Inches(TEXT_W), alignment=WD_TAB_ALIGNMENT.RIGHT, leader=WD_TAB_LEADER.DOTS
+    )
 
 props = doc.core_properties
 props.title = SHORT_TITLE
@@ -559,104 +486,157 @@ props.keywords = "ChainGuard, last-mile logistics, custody, shrinkage, reconcili
 props.comments = "Technical seminar report, Computer Science and Engineering Department, NMIET."
 
 
+def front_heading(text, bookmark=None, break_before=False, size=15, before=0, after=18):
+    p = doc.add_paragraph()
+    pf = p.paragraph_format
+    pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pf.space_before = Pt(before)
+    pf.space_after = Pt(after)
+    pf.line_spacing = 1.0
+    pf.keep_with_next = True
+    pf.page_break_before = break_before
+    run = p.add_run(text)
+    style_run(run, size=size, bold=True)
+    if bookmark:
+        add_bookmark(p, bookmark)
+    return p
+
+
+def rest_heading(text, before=22, after=12):
+    return front_heading(text, size=15, before=before, after=after)
+
+
 # ---------------------------------------------------------------------------
 # title page
 # ---------------------------------------------------------------------------
-title_logo_header()
-spacer(14)
-center("TECHNICAL SEMINAR REPORT", 16, True, after=5)
-center("ON", 12, after=7)
-center(TITLE, 18.5, True, after=12, line=1.18)
-center("Project Reference: ChainGuard v2.4", 11.5, True, after=3)
+center("A SEMINAR REPORT", 12, True, after=3)
+center("ON", 12, after=5)
+center(TITLE, 14.2, True, after=10, line=1.12)
+center("Project Reference: ChainGuard v2.4", 10.5, True, after=12)
+
+center("SUBMITTED TO THE", 12, True, after=3)
+center("SAVITRIBAI PHULE PUNE UNIVERSITY, PUNE", 12, True, after=7)
 center(
-    "A client-side control plane for sealed dispatch, GPS-anchored telemetry, "
-    "single-use unlock tokens and unit-exact warehouse reconciliation",
-    11,
-    italic=True,
-    after=34,
-    line=1.25,
+    "IN THE PARTIAL FULFILLMENT OF THE REQUIREMENTS FOR THE AWARD OF",
+    9.5,
+    after=1,
 )
+center("THE DEGREE OF", 9.5, after=1)
+center("THIRD YEAR COMPUTER SCIENCE AND ENGINEERING", 12, True, after=11)
 
-center("Presented by", 12, True, after=6)
-center("Pallavi Kokate (B34)", 12, after=3)
-center("Anil Kewat (B45)", 12, after=3)
-center("Nikita Sagar (B50)", 12, after=30)
+center("BY", 12, True, after=4)
+center("Ms. Pallavi Kokate (B34)  •  Mr. Anil Kewat (B45)  •  Ms. Nikita Sagar (B50)", 12, after=2)
+center("Roll No: B34 / B45 / B50", 10.5, after=24)
 
-center("Project Guide", 12, True, after=3)
-center("Miss. Sakshi Ambadkar", 12, after=22)
-center("Academic Year 2026–27", 11.5, after=2)
-center("Department of Computer Science and Engineering", 11.5, after=0)
+center("UNDER THE GUIDANCE OF", 12, True, after=4)
+center("Miss. Sakshi Ambadkar", 12, True, after=20)
 
-start_page()
+center("Nutan Maharashtra Vidya Prasarak Mandal’s", 10.5, after=2)
+center("NUTAN MAHARASHTRA INSTITUTE OF ENGINEERING & TECHNOLOGY, PUNE", 12, True, after=2, line=1.05)
 
+logo_tbl = doc.add_table(rows=1, cols=2)
+logo_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+logo_tbl.autofit = False
+no_borders(logo_tbl)
+cell_margins(logo_tbl, left=0.02, right=0.02, top=0.0, bottom=0.0)
+for index, (filename, width) in enumerate(
+    (("logo_college.png", 0.55), ("logo_university.png", 0.50))
+):
+    cell = logo_tbl.rows[0].cells[index]
+    cell.width = Inches(1.0)
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p = cell.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.line_spacing = 1.0
+    p.add_run().add_picture(str(FIG / filename), width=Inches(width))
+
+center(
+    "Samarth Vidya Sankul, Vishnupuri, Talegaon Dabhade, Maharashtra 410507",
+    9.5,
+    before=4,
+    after=2,
+)
+center("Department of Computer Science and Engineering", 10, True, after=22)
+center("ACADEMIC YEAR : 2026–27", 11, True, after=0)
 
 # ---------------------------------------------------------------------------
+# front matter section: Roman numerals, footer only
+# ---------------------------------------------------------------------------
+front = new_section()
+blank_header(front)
+set_page_numbering(front, "upperRoman", 1)
+add_page_number_footer(front)
+
 # certificate
-# ---------------------------------------------------------------------------
-center("Nutan Maharashtra Vidya Prasarak Mandal’s (NMVPM’s)", 11.5, True, before=0, after=2)
-center("NUTAN MAHARASHTRA INSTITUTE OF ENGINEERING AND TECHNOLOGY (NMIET)", 12.5, True, after=2)
-center("Under Administrative Support - Pimpri Chinchwad Education Trust (PCET)", 10.5, after=2)
-center("Computer Science and Engineering Department", 11.5, True, after=22)
-
-center("CERTIFICATE", 16, True, after=20)
-
-para("This is to certify that the technical seminar report entitled", 12, WD_ALIGN_PARAGRAPH.CENTER, after=8, line=1.3)
-para(TITLE, 13, WD_ALIGN_PARAGRAPH.CENTER, after=6, line=1.2, keep=True, bold_all=True)
-para("(Project Reference: ChainGuard v2.4)", 11.5, WD_ALIGN_PARAGRAPH.CENTER, after=8, line=1.2)
-para("has been prepared and submitted by", 12, WD_ALIGN_PARAGRAPH.CENTER, after=6, line=1.3)
-para("Pallavi Kokate (B34), Anil Kewat (B45) and Nikita Sagar (B50)", 12, WD_ALIGN_PARAGRAPH.CENTER, after=12, line=1.3, bold_all=True)
+front_heading("CERTIFICATE", "bm_cert", after=22)
+p = para(
+    "This is to certify that the seminar entitled ",
+    align=WD_ALIGN_PARAGRAPH.JUSTIFY,
+    after=0,
+    keep=True,
+)
+run = p.add_run("“" + TITLE_DISPLAY + "”")
+style_run(run, size=BODY_SIZE, bold=True)
+run = p.add_run(
+    " submitted by Ms. Pallavi Kokate (B34), Mr. Anil Kewat (B45) and "
+    "Ms. Nikita Sagar (B50), students of Third Year Computer Science and Engineering, "
+    "is a bonafide work carried out by them under the supervision of "
+    "Miss. Sakshi Ambadkar, and it is approved for the partial fulfillment of the "
+    "requirement of Savitribai Phule Pune University, Pune for the award of the "
+    "degree of Third Year Computer Science and Engineering."
+)
+style_run(run, size=BODY_SIZE)
+p.paragraph_format.space_after = Pt(9)
 
 para(
-    "students of the Computer Science and Engineering Department of Nutan Maharashtra "
-    "Institute of Engineering and Technology (NMIET), under the guidance of "
-    "Miss. Sakshi Ambadkar.",
-    12,
-    WD_ALIGN_PARAGRAPH.JUSTIFY,
-    after=8,
-    line=1.35,
-)
-para(
-    "The report presents the proposed custody-verification control plane, its architecture, "
-    "methodology, applications, advantages, limitations and future scope as part of the "
-    "academic requirements for the technical seminar.",
-    12,
-    WD_ALIGN_PARAGRAPH.JUSTIFY,
-    after=6,
-    line=1.35,
+    "The seminar work has not been earlier submitted to any other institute or "
+    "university for the award of degree.",
+    after=18,
 )
 
-spacer(30)
+spacer(88)
 sig = doc.add_table(rows=1, cols=3)
 sig.alignment = WD_TABLE_ALIGNMENT.CENTER
 sig.autofit = False
 no_borders(sig)
-for i, label in enumerate(("Guide’s Signature", "HOD’s Signature", "Principal’s Signature")):
-    sig.columns[i].width = Inches(1.97)
+for i, (name, label) in enumerate(
+    (
+        ("Prof. Sakshi Ambadkar", "(Seminar Guide)"),
+        ("Dr. Mahesh Wankhede", "HOD"),
+        ("Dr. Pramod Patil", "Principal"),
+    )
+):
+    sig.columns[i].width = Inches(TEXT_W / 3)
     cell = sig.rows[0].cells[i]
-    cell.width = Inches(1.97)
+    cell.width = Inches(TEXT_W / 3)
     cell.vertical_alignment = WD_ALIGN_VERTICAL.BOTTOM
     p = cell.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.paragraph_format.space_before = Pt(30)
-    run = p.add_run(label)
-    style_run(run, 11.5)
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    run = p.add_run(name)
+    style_run(run, 11.3, bold=True)
+    p2 = cell.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p2.paragraph_format.space_before = Pt(2)
+    p2.paragraph_format.space_after = Pt(0)
+    run = p2.add_run(label)
+    style_run(run, 10.5)
 
-spacer(26)
-para("Date: ____________________          Place: ____________________", 11.5, WD_ALIGN_PARAGRAPH.LEFT, after=0, line=1.2)
+spacer(80)
+para("Place : Pune", 11.3, WD_ALIGN_PARAGRAPH.LEFT, after=2, line=1.2)
+para("Date : ____________________", 11.3, WD_ALIGN_PARAGRAPH.LEFT, after=0, line=1.2)
 
-start_page()
-
-
-# ---------------------------------------------------------------------------
 # acknowledgement
-# ---------------------------------------------------------------------------
-front_heading("ACKNOWLEDGEMENT")
+front_heading("ACKNOWLEDGEMENT", "bm_ack", break_before=True, after=18)
 para(
     "I would like to express my sincere gratitude to our seminar guide, Miss. Sakshi Ambadkar, "
     "for her continuous guidance, patient review and constructive criticism throughout the "
     "preparation of this report. Her questions repeatedly pushed us to separate what the "
     "prototype actually demonstrates from what we hoped it would demonstrate.",
-    after=10,
+    after=8,
 )
 para(
     "I am thankful to the faculty members and the Department of Computer Science and Engineering "
@@ -664,24 +644,26 @@ para(
     "design, build and deploy this project. I also acknowledge the open-source communities behind "
     "React, TypeScript, Vite, Tailwind CSS, Zustand and the Python libraries used to prepare this "
     "document; their documentation made a small, independent implementation possible.",
-    after=10,
+    after=8,
 )
 para(
     "Finally, I extend my heartfelt thanks to my family, teammates and peers for their constant "
     "motivation, honest feedback and support during the completion of this seminar. The working "
     "prototype, the deployment and the demonstration dataset were built collaboratively, and the "
     "credit for anything that works belongs to the team.",
-    after=18,
+    after=20,
 )
-para("Pallavi Kokate, Anil Kewat and Nikita Sagar", 11.5, WD_ALIGN_PARAGRAPH.RIGHT, after=0, line=1.2, italic=True)
+para(
+    "Pallavi Kokate, Anil Kewat and Nikita Sagar",
+    11.3,
+    WD_ALIGN_PARAGRAPH.RIGHT,
+    after=0,
+    line=1.2,
+    italic=True,
+)
 
-start_page()
-
-
-# ---------------------------------------------------------------------------
 # abstract
-# ---------------------------------------------------------------------------
-front_heading("ABSTRACT")
+front_heading("ABSTRACT", "bm_abs", break_before=True, after=18)
 para(
     "Last-mile shrinkage is usually investigated at the warehouse, after the vehicle has returned "
     "and the count has failed. This report argues that the failure begins earlier, at dispatch, "
@@ -722,82 +704,107 @@ para(
     after=0,
 )
 
-start_page()
-
-
-# ---------------------------------------------------------------------------
 # table of contents
-# ---------------------------------------------------------------------------
-front_heading("TABLE OF CONTENTS")
-toc_intro = doc.add_paragraph()
-toc_intro.paragraph_format.space_before = Pt(0)
-toc_intro.paragraph_format.space_after = Pt(6)
-toc_intro.paragraph_format.line_spacing = 1.0
-toc_intro.paragraph_format.tab_stops.add_tab_stop(Inches(1.0))
-run = toc_intro.add_run("Sr. No.\tContents")
-style_run(run, 11.5, bold=True)
+front_heading("TABLE OF CONTENTS", "bm_toc", break_before=True, after=14)
 
+front_entries = [
+    ("Certificate", "bm_cert"),
+    ("Acknowledgement", "bm_ack"),
+    ("Abstract", "bm_abs"),
+    ("Table of Contents", "bm_toc"),
+    ("List of Figures", "bm_lof"),
+    ("List of Tables", "bm_lot"),
+    ("List of Abbreviations", "bm_abbr"),
+]
+for label, bm in front_entries:
+    p = doc.add_paragraph()
+    pf = p.paragraph_format
+    pf.space_before = Pt(0)
+    pf.space_after = Pt(1)
+    pf.line_spacing = 1.05
+    pf.tab_stops.add_tab_stop(
+        Inches(TEXT_W), alignment=WD_TAB_ALIGNMENT.RIGHT, leader=WD_TAB_LEADER.DOTS
+    )
+    run = p.add_run(label)
+    style_run(run, 11.3, bold=True)
+    add_field(p, f"PAGEREF {bm} \\h", "", size=11.3, bold=True, tab_first=True)
+
+spacer(3)
 toc_p = doc.add_paragraph()
 toc_p.paragraph_format.space_before = Pt(0)
 toc_p.paragraph_format.space_after = Pt(0)
 toc_p.paragraph_format.line_spacing = 1.0
-add_field(toc_p, 'TOC \\o "1-2" \\z \\u', "Right-click and choose Update Field to build the table of contents.")
+add_field(
+    toc_p,
+    'TOC \\o "1-2" \\z \\u',
+    "Update the field to build the table of contents.",
+    size=11.3,
+)
 
-start_page()
+# figures and tables known before the body is written
+figures = []
+tables = []
+for block in BLOCKS:
+    if block[0] == "fig":
+        label, body = caption_parts(block[2])
+        figures.append((label, body, "fig_" + label.split()[-1].replace(".", "_")))
+    elif block[0] == "tbl":
+        label, body = caption_parts(block[1]["caption"])
+        tables.append((label, body, "tbl_" + label.split()[-1].replace(".", "_")))
 
-
-# ---------------------------------------------------------------------------
-# list of figures and tables
-# ---------------------------------------------------------------------------
-front_heading("LIST OF FIGURES")
-figures = [
-    ("Figure 3.1", "Four-plane architecture of the ChainGuard v2 control plane"),
-    ("Figure 3.2", "Custody lifecycle state machine"),
-    ("Figure 4.1", "End-to-end operational workflow across the four role portals"),
-    ("Figure 4.2", "Warehouse reconciliation decision flow"),
-]
-for label, text in figures:
-    p = doc.add_paragraph()
-    pf = p.paragraph_format
-    pf.left_indent = Inches(0.1)
-    pf.space_before = Pt(2)
-    pf.space_after = Pt(6)
-    pf.line_spacing = 1.15
-    pf.tab_stops.add_tab_stop(Inches(1.1))
-    run = p.add_run(label + "\t")
-    style_run(run, 11.5, bold=True)
-    run = p.add_run(text)
-    style_run(run, 11.5)
-
-spacer(18)
-front_heading("LIST OF TABLES")
-tables = [
-    ("Table 2.1", "Summary matrix of the literature survey"),
-    ("Table 3.1", "Custody states, guards and permitted transitions"),
-    ("Table 4.1", "Technology stack of the implemented prototype"),
-    ("Table 4.2", "Seeded demonstration fleet"),
-    ("Table 7.1", "Feature matrix comparison with existing approaches"),
-]
-for label, text in tables:
-    p = doc.add_paragraph()
-    pf = p.paragraph_format
-    pf.left_indent = Inches(0.1)
-    pf.space_before = Pt(2)
-    pf.space_after = Pt(6)
-    pf.line_spacing = 1.15
-    pf.tab_stops.add_tab_stop(Inches(1.1))
-    run = p.add_run(label + "\t")
-    style_run(run, 11.5, bold=True)
-    run = p.add_run(text)
-    style_run(run, 11.5)
-
-start_page()
+# list of figures and list of tables (single page, template style)
+front_heading("LIST OF FIGURES", "bm_lof", break_before=True, size=15.5, after=14)
 
 
-# ---------------------------------------------------------------------------
+def list_table(rows, first_col):
+    table = doc.add_table(rows=1, cols=3)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    no_borders(table)
+    cell_margins(table, left=0.04, right=0.04, top=0.03, bottom=0.03)
+    widths = (1.15, 3.75, 0.8)
+    for i, width in enumerate(widths):
+        table.columns[i].width = Inches(width)
+    heading_cells = table.rows[0].cells
+    for i, label in enumerate((first_col, "Name", "Page no")):
+        cell = heading_cells[i]
+        cell.width = Inches(widths[i])
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p.paragraph_format.space_before = Pt(2)
+        p.paragraph_format.space_after = Pt(4)
+        run = p.add_run(label)
+        style_run(run, 12, bold=True)
+    for label, name, bm in rows:
+        row = table.add_row()
+        row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+        for i, value in enumerate((label, name)):
+            cell = row.cells[i]
+            cell.width = Inches(widths[i])
+            p = cell.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            p.paragraph_format.space_before = Pt(1)
+            p.paragraph_format.space_after = Pt(1)
+            p.paragraph_format.line_spacing = 1.0
+            run = p.add_run(value)
+            style_run(run, 10.5)
+        cell = row.cells[2]
+        cell.width = Inches(widths[2])
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_after = Pt(1)
+        add_field(p, f"PAGEREF {bm} \\h", "", size=10.5)
+    return table
+
+
+list_table(figures, "Figure No")
+spacer(44)
+front_heading("LIST OF TABLES", "bm_lot", size=15.5, after=14)
+list_table(tables, "Table No")
+
 # abbreviations
-# ---------------------------------------------------------------------------
-front_heading("LIST OF ABBREVIATIONS")
+front_heading("LIST OF ABBREVIATIONS", "bm_abbr", break_before=True, after=14)
 abbreviations = [
     ("API", "Application Programming Interface"),
     ("CDN", "Content Delivery Network"),
@@ -833,43 +840,259 @@ abbreviations = [
     ("XSS", "Cross-Site Scripting"),
     ("ZTA", "Zero Trust Architecture"),
 ]
-abbr = doc.add_table(rows=1, cols=3)
-abbr.style = "Table Grid"
+abbr = doc.add_table(rows=1, cols=2)
 abbr.alignment = WD_TABLE_ALIGNMENT.CENTER
 abbr.autofit = False
-table_borders(abbr)
-cell_margins(abbr)
-for i, width in enumerate((0.5, 1.2, 4.2)):
+no_borders(abbr)
+cell_margins(abbr, left=0.04, right=0.04, top=0.03, bottom=0.03)
+for i, width in enumerate((1.05, 4.65)):
     abbr.columns[i].width = Inches(width)
-for i, header in enumerate(("Sr. No.", "Abbreviation", "Full Form")):
+for i, label in enumerate(("Abbreviation", "Full Form")):
     cell = abbr.rows[0].cells[i]
-    cell.width = Inches((0.5, 1.2, 4.2)[i])
-    set_cell(cell, header, size=9.0, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER, fill="E7E6E6")
-abbr.rows[0]._tr.get_or_add_trPr().append(OxmlElement("w:tblHeader"))
-for index, (short, full) in enumerate(abbreviations, start=1):
+    cell.width = Inches((1.05, 4.65)[i])
+    p = cell.paragraphs[0]
+    p.paragraph_format.space_before = Pt(2)
+    p.paragraph_format.space_after = Pt(3)
+    run = p.add_run(label)
+    style_run(run, TABLE_SIZE, bold=True)
+    bottom_rule(cell, size="6", color="000000")
+for short, full in abbreviations:
     row = abbr.add_row()
     row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
-    for i, value in enumerate((str(index), short, full)):
+    for i, value in enumerate((short, full)):
         cell = row.cells[i]
-        cell.width = Inches((0.5, 1.2, 4.2)[i])
-        set_cell(cell, value, size=9.0, align=WD_ALIGN_PARAGRAPH.CENTER if i == 0 else WD_ALIGN_PARAGRAPH.LEFT)
-
-start_page()
+        cell.width = Inches((1.05, 4.65)[i])
+        p = cell.paragraphs[0]
+        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_after = Pt(1)
+        p.paragraph_format.line_spacing = 1.0
+        run = p.add_run(value)
+        style_run(run, 10, bold=(i == 0))
 
 
 # ---------------------------------------------------------------------------
-# main chapters
+# body helpers
 # ---------------------------------------------------------------------------
-ref_number = 0
+def add_caption(text, bookmark=None):
+    p = doc.add_paragraph()
+    pf = p.paragraph_format
+    pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pf.space_before = Pt(4)
+    pf.space_after = Pt(10)
+    pf.line_spacing = 1.0
+    run = p.add_run(text)
+    style_run(run, size=CAPTION_SIZE, bold=True)
+    if bookmark:
+        add_bookmark(p, bookmark)
+    return p
+
+
+def set_cell(cell, text, size=TABLE_SIZE, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT):
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p = cell.paragraphs[0]
+    pf = p.paragraph_format
+    pf.alignment = align
+    pf.space_before = Pt(1)
+    pf.space_after = Pt(1)
+    pf.line_spacing = 1.0
+    for run in list(p.runs):
+        run._element.getparent().remove(run._element)
+    add_rich(p, str(text), size=size, bold_all=bold)
+
+
+def add_table(spec):
+    headers = spec["headers"]
+    rows = spec["rows"]
+    widths = list(spec["widths"])
+    size = spec.get("size", 8.8)
+    if spec["caption"].startswith("Table 3.1"):
+        widths = [1.0, 1.5, 1.2, 1.0, 1.05]
+        size = 6.8
+
+    scale = TEXT_W / sum(widths)
+    widths = [w * scale for w in widths]
+
+    table = doc.add_table(rows=1, cols=len(headers))
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    no_borders(table)
+    cell_margins(table, left=0.04, right=0.04, top=0.03, bottom=0.03)
+    for i, width in enumerate(widths):
+        table.columns[i].width = Inches(width)
+
+    header = table.rows[0]
+    tr_pr = header._tr.get_or_add_trPr()
+    tr_pr.append(OxmlElement("w:tblHeader"))
+    tr_pr.append(OxmlElement("w:cantSplit"))
+    for i, label in enumerate(headers):
+        cell = header.cells[i]
+        cell.width = Inches(widths[i])
+        set_cell(cell, label, size=size, bold=True, align=WD_ALIGN_PARAGRAPH.LEFT)
+        bottom_rule(cell, size="4", color="000000")
+
+    for values in rows:
+        row = table.add_row()
+        tr_pr = row._tr.get_or_add_trPr()
+        tr_pr.append(OxmlElement("w:cantSplit"))
+        for i, value in enumerate(values):
+            cell = row.cells[i]
+            cell.width = Inches(widths[i])
+            set_cell(cell, value, size=size)
+
+    caption = caption_text(spec["caption"])
+    label, _ = caption_parts(caption)
+    bm = "tbl_" + label.split()[-1].replace(".", "_")
+    add_caption(caption, bm)
+
+
+def add_figure(filename, caption):
+    p = doc.add_paragraph()
+    pf = p.paragraph_format
+    pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pf.space_before = Pt(8)
+    pf.space_after = Pt(0)
+    pf.line_spacing = 1.0
+    pf.keep_with_next = True
+    run = p.add_run()
+    run.add_picture(str(FIG / filename), width=Inches(5.0))
+
+    caption = caption_text(caption)
+    label, _ = caption_parts(caption)
+    bm = "fig_" + label.split()[-1].replace(".", "_")
+    add_caption(caption, bm)
+
+
+def add_formula(lines):
+    for line in lines:
+        p = doc.add_paragraph()
+        pf = p.paragraph_format
+        pf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        pf.space_before = Pt(3)
+        pf.space_after = Pt(3)
+        pf.line_spacing = 1.15
+        run = p.add_run(line)
+        style_run(run, size=11.3, italic=True)
+
+
+def add_code(lines):
+    table = doc.add_table(rows=1, cols=1)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    table.columns[0].width = Inches(TEXT_W)
+    tbl_pr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{edge}")
+        if edge in ("top", "bottom", "left", "right"):
+            el.set(qn("w:val"), "single")
+            el.set(qn("w:sz"), "4")
+            el.set(qn("w:color"), "BFBFBF")
+        else:
+            el.set(qn("w:val"), "nil")
+        el.set(qn("w:space"), "0")
+        borders.append(el)
+    tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
+    cell_margins(table, left=0.1, right=0.1, top=0.06, bottom=0.06)
+    tr_pr = table.rows[0]._tr.get_or_add_trPr()
+    tr_pr.append(OxmlElement("w:cantSplit"))
+    cell = table.rows[0].cells[0]
+    cell.width = Inches(TEXT_W)
+    shade(cell, "F5F5F5")
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    cell.paragraphs[0]._p.getparent().remove(cell.paragraphs[0]._p)
+    for line in lines:
+        p = cell.add_paragraph()
+        pf = p.paragraph_format
+        pf.space_before = Pt(0)
+        pf.space_after = Pt(0)
+        pf.line_spacing = 1.0
+        pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        run = p.add_run(line if line else " ")
+        style_run(run, size=8.8, name=MONO_FONT)
+    spacer(5)
+
+
+def add_callout(text):
+    table = doc.add_table(rows=1, cols=1)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    table.columns[0].width = Inches(TEXT_W)
+    tbl_pr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{edge}")
+        if edge == "left":
+            el.set(qn("w:val"), "single")
+            el.set(qn("w:sz"), "18")
+            el.set(qn("w:color"), "404040")
+        else:
+            el.set(qn("w:val"), "nil")
+        el.set(qn("w:space"), "0")
+        borders.append(el)
+    tbl_pr.insert_element_before(borders, "w:shd", "w:tblLayout", "w:tblCellMar", "w:tblLook")
+    cell_margins(table, left=0.14, right=0.12, top=0.07, bottom=0.07)
+    tr_pr = table.rows[0]._tr.get_or_add_trPr()
+    tr_pr.append(OxmlElement("w:cantSplit"))
+    cell = table.rows[0].cells[0]
+    cell.width = Inches(TEXT_W)
+    shade(cell, "F2F2F2")
+    p = cell.paragraphs[0]
+    pf = p.paragraph_format
+    pf.space_before = Pt(1)
+    pf.space_after = Pt(1)
+    pf.line_spacing = 1.2
+    pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    add_rich(p, text, size=10.5)
+    spacer(8)
+
+
+def chapter_section(number, title):
+    section = new_section()
+    section.different_first_page_header_footer = True
+    add_running_header(section, f"Chapter {number}", first_page=True)
+    add_running_header(section)
+    add_page_number_footer(section, first_page=True)
+    add_page_number_footer(section)
+    if number == 1:
+        set_page_numbering(section, "decimal", 1)
+    else:
+        set_page_numbering(section, "decimal", None)
+    p = doc.add_heading(title, level=1)
+    p.paragraph_format.page_break_before = False
+    return section
+
+
+# ---------------------------------------------------------------------------
+# chapters
+# ---------------------------------------------------------------------------
+chapter_no = 0
+ref_no = 0
 for block in BLOCKS:
     kind = block[0]
 
     if kind == "h1":
-        _consume_break(doc.add_heading(block[1], level=1))
+        raw = block[1].strip()
+        number = raw.split(".")[0].strip()
+        if raw.upper().startswith("10."):
+            section = new_section()
+            section.different_first_page_header_footer = False
+            add_running_header(section)
+            add_page_number_footer(section)
+            set_page_numbering(section, "decimal", None)
+            p = doc.add_heading("References", level=1)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(18)
+            for run in p.runs:
+                style_run(run, size=15, bold=True, caps=True)
+        else:
+            chapter_no += 1
+            title = CHAPTER_TITLES.get(number, raw.title())
+            chapter_section(chapter_no, title)
     elif kind == "h2":
-        _consume_break(doc.add_heading(block[1], level=2))
+        doc.add_heading(block[1], level=2)
     elif kind == "h3":
-        _consume_break(doc.add_heading(block[1], level=3))
+        doc.add_heading(block[1], level=3)
     elif kind == "p":
         para(block[1])
     elif kind == "bul":
@@ -878,7 +1101,7 @@ for block in BLOCKS:
         spacer(3)
     elif kind == "num":
         for index, item in enumerate(block[1], start=1):
-            add_item(f"{index}.", item, left=0.42, hang=0.3)
+            add_item(f"{index}.", item, left=0.4, hang=0.28)
         spacer(3)
     elif kind == "fig":
         add_figure(block[1], block[2])
@@ -893,18 +1116,19 @@ for block in BLOCKS:
     elif kind == "ref":
         p = doc.add_paragraph()
         pf = p.paragraph_format
-        pf.left_indent = Inches(0.42)
-        pf.first_line_indent = Inches(-0.42)
+        pf.left_indent = Inches(0.4)
+        pf.first_line_indent = Inches(-0.4)
         pf.alignment = WD_ALIGN_PARAGRAPH.LEFT
         pf.space_before = Pt(0)
-        pf.space_after = Pt(0)
-        pf.line_spacing = 0.98
-        pf.tab_stops.add_tab_stop(Inches(0.42))
-        ref_number += 1
-        run = p.add_run(f"[{ref_number}]\t")
-        style_run(run, 9.8, bold=True)
-        add_rich(p, block[1], size=9.8)
+        pf.space_after = Pt(3)
+        pf.line_spacing = 1.05
+        pf.tab_stops.add_tab_stop(Inches(0.4))
+        ref_no += 1
+        run = p.add_run(f"[{ref_no}]\t")
+        style_run(run, 10.5, bold=True)
+        add_rich(p, block[1], size=10.5)
 
 doc.save(OUT_DOCX)
 print("wrote", OUT_DOCX)
-print("blocks:", len(BLOCKS))
+print("blocks:", len(BLOCKS), "sections:", len(doc.sections))
+print("figures:", len(figures), "tables:", len(tables))

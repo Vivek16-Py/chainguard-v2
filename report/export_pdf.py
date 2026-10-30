@@ -35,7 +35,7 @@ def main():
             try:
                 style = doc.Styles(name)
                 style.Font.Name = "Times New Roman"
-                style.Font.Size = 11.5
+                style.Font.Size = 11.3
                 style.Font.Color = 0
                 style.ParagraphFormat.SpaceAfter = 2
                 style.ParagraphFormat.LineSpacingRule = 0
